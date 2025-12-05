@@ -5,11 +5,13 @@ const router = express.Router();
 const exampleRoutes = require('./example');
 const userRoutes = require('./users');
 const doctorRoutes = require('./doctors');
+const appointmentRoutes = require('./appointments');
 
 // Mount routes
 router.use('/example', exampleRoutes);
 router.use('/users', userRoutes);
 router.use('/doctors', doctorRoutes);
+router.use('/appointments', appointmentRoutes);
 
 // API info route
 router.get('/', (req, res) => {
@@ -20,7 +22,8 @@ router.get('/', (req, res) => {
       health: '/health',
       example: '/api/example',
       users: '/api/users',
-      doctors: '/api/doctors'
+      doctors: '/api/doctors',
+      appointments: '/api/appointments'
     }
   });
 });
