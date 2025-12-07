@@ -29,6 +29,12 @@ router.post('/initialize', paymentController.initializePayment);
 // GET /api/payments/:paymentId/status - Get payment status
 router.get('/:paymentId/status', paymentController.getPaymentStatus);
 
+// GET /api/payments/:paymentId/progress - Get payment progress
+router.get('/:paymentId/progress', paymentController.getPaymentProgress);
+
+// GET /api/payments/:paymentId/timeline - Get payment timeline
+router.get('/:paymentId/timeline', paymentController.getPaymentTimeline);
+
 // POST /api/payments/:paymentId/verify - Verify payment status
 router.post('/:paymentId/verify', paymentController.verifyPayment);
 

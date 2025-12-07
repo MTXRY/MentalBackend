@@ -1,5 +1,6 @@
 const { supabase } = require('../config/supabase');
 const paymentService = require('../services/paymentService');
+const paymentProgressService = require('../services/paymentProgressService');
 
 const paymentController = {
   // ========== PATIENT-SIDE PAYMENT METHODS ==========
@@ -393,6 +394,70 @@ const paymentController = {
     }
   },
 
+  // Get payment progress
+  getPaymentProgress: async (req, res, next) => {
+    try {
+      const { paymentId } = req.params;
+      const patientId = req.user.id;
+
+      // Verify payment ownership
+      const { data: payment, error } = await supabase
+        .from('payments')
+        .select('id')
+        .eq('id', paymentId)
+        .eq('patient_id', patientId)
+        .single();
+
+      if (error || !payment) {
+        return res.status(404).json({
+          error: 'Payment not found',
+          message: 'Payment not found or you do not have access to it'
+        });
+      }
+
+      const progress = await paymentProgressService.getPaymentProgress(paymentId);
+
+      res.json({
+        message: 'Payment progress retrieved',
+        data: progress
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  // Get payment timeline
+  getPaymentTimeline: async (req, res, next) => {
+    try {
+      const { paymentId } = req.params;
+      const patientId = req.user.id;
+
+      // Verify payment ownership
+      const { data: payment, error } = await supabase
+        .from('payments')
+        .select('id')
+        .eq('id', paymentId)
+        .eq('patient_id', patientId)
+        .single();
+
+      if (error || !payment) {
+        return res.status(404).json({
+          error: 'Payment not found',
+          message: 'Payment not found or you do not have access to it'
+        });
+      }
+
+      const timeline = await paymentProgressService.getPaymentTimeline(paymentId);
+
+      res.json({
+        message: 'Payment timeline retrieved',
+        data: timeline
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
   // Create payment from patient side (legacy - for backward compatibility)
   createPaymentFromPatient: async (req, res, next) => {
     try {
@@ -414,6 +479,14 @@ const paymentController = {
         return res.status(400).json({
           error: 'Missing required fields',
           message: 'appointment_id, amount, and payment_method are required'
+        });
+      }
+
+      // Validate payment method - only GCash and PayMaya allowed
+      if (!['gcash', 'paymaya'].includes(payment_method.toLowerCase())) {
+        return res.status(400).json({
+          error: 'Invalid payment method',
+          message: 'Only GCash and PayMaya are supported'
         });
       }
 
