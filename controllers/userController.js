@@ -494,8 +494,7 @@ const userController = {
         query = query.ilike('specialization', `%${specialization}%`);
       }
 
-      // Note: Users table might not have is_active field
-      // This is a placeholder for future implementation
+      // Filter by is_active if provided
       if (is_active !== undefined) {
         query = query.eq('is_active', is_active === 'true');
       }
