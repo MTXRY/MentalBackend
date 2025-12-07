@@ -47,3 +47,5 @@ COMMENT ON COLUMN doctors.consultation_fee IS 'Fee per consultation session';
 COMMENT ON COLUMN doctors.is_active IS 'Whether the doctor is currently accepting new patients';
 COMMENT ON COLUMN doctors.is_verified IS 'Whether the doctor credentials have been verified by admin';
 
+
+

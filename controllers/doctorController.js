@@ -283,15 +283,24 @@ const doctorController = {
       // Remove password_hash from response
       const { password_hash: _, ...doctorData } = doctor;
 
-      // Generate JWT token (using same auth middleware)
+      // Generate JWT token (using same auth middleware) - include doctor role
       const { generateToken } = require('../middleware/auth');
-      const token = generateToken(doctor);
+      const token = generateToken({
+        ...doctor,
+        role: 'doctor' // Set role as doctor
+      });
+
+      // Include role in response data
+      const responseData = {
+        ...doctorData,
+        role: 'doctor'
+      };
 
       res.json({
         success: true,
         message: 'Login successful',
         token: token,
-        data: doctorData
+        data: responseData
       });
     } catch (error) {
       next(error);
@@ -311,7 +320,8 @@ const doctorController = {
         years_of_experience,
         consultation_fee,
         profile_image_url,
-        is_active
+        is_active,
+        is_verified
       } = req.body;
 
       const updateData = {};
@@ -324,6 +334,7 @@ const doctorController = {
       if (consultation_fee !== undefined) updateData.consultation_fee = consultation_fee;
       if (profile_image_url !== undefined) updateData.profile_image_url = profile_image_url;
       if (is_active !== undefined) updateData.is_active = is_active;
+      if (is_verified !== undefined) updateData.is_verified = is_verified;
 
       if (Object.keys(updateData).length === 0) {
         return res.status(400).json({

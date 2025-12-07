@@ -18,6 +18,12 @@ router.post('/login', userController.login);
 // GET /api/users/me - Get current authenticated user (protected route)
 router.get('/me', authenticate, userController.getCurrentUser);
 
+// GET /api/users/doctors - Get all doctors (users with role='doctor')
+router.get('/doctors', userController.getDoctors);
+
+// GET /api/users/doctors/available - Get available doctors
+router.get('/doctors/available', userController.getAvailableDoctors);
+
 // GET /api/users/:id - Get user by ID
 router.get('/:id', userController.getById);
 

@@ -1,19 +1,86 @@
 const { supabase } = require('../config/supabase');
 
+// Helper function to enrich appointments with user data
+const enrichAppointmentsWithUsers = async (appointments) => {
+  if (!appointments || appointments.length === 0) {
+    return appointments;
+  }
+
+  const doctorIds = [...new Set(appointments.map(apt => apt.doctor_id))];
+  const patientIds = [...new Set(appointments.map(apt => apt.user_id))];
+  const allUserIds = [...new Set([...doctorIds, ...patientIds])];
+
+  // Fetch all related users
+  const { data: users, error: usersError } = await supabase
+    .from('users')
+    .select('id, full_name, email_address, role, contact_number')
+    .in('id', allUserIds);
+
+  if (!usersError && users) {
+    // Map user data to appointments
+    const usersMap = new Map(users.map(u => [u.id, u]));
+    appointments.forEach(apt => {
+      apt.doctor = usersMap.get(apt.doctor_id) || null;
+      apt.user = usersMap.get(apt.user_id) || null;
+    });
+  }
+
+  return appointments;
+};
+
 const appointmentController = {
+  // Get all appointments (admin only)
+  getAll: async (req, res, next) => {
+    try {
+      const { status, upcoming } = req.query;
+
+      let query = supabase
+        .from('appointments')
+        .select('*')
+        .order('appointment_date', { ascending: false })
+        .order('appointment_time', { ascending: false });
+
+      // Apply status filter
+      if (status) {
+        query = query.eq('status', status);
+      }
+
+      // Filter for upcoming appointments
+      if (upcoming === 'true') {
+        const today = new Date().toISOString().split('T')[0];
+        query = query.gte('appointment_date', today);
+      }
+
+      const { data: appointments, error } = await query;
+
+      if (error) {
+        error.status = 500;
+        throw error;
+      }
+
+      // Enrich appointments with user data
+      await enrichAppointmentsWithUsers(appointments);
+
+      res.json({
+        message: 'Appointments retrieved successfully',
+        count: appointments?.length || 0,
+        data: appointments || []
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
   // Get all appointments for a user
   getByUserId: async (req, res, next) => {
     try {
       const { userId } = req.params;
       const { status, upcoming } = req.query;
 
+      // Fetch appointments first
       let query = supabase
         .from('appointments')
-        .select(`
-          *,
-          doctor:doctors(id, full_name, specialization, profile_image_url, is_verified),
-          user:users(id, full_name, email_address)
-        `)
+        .select('*')
         .eq('user_id', userId)
         .order('appointment_date', { ascending: true })
         .order('appointment_time', { ascending: true });
@@ -29,24 +96,27 @@ const appointmentController = {
         query = query.gte('appointment_date', today);
       }
 
-      const { data, error } = await query;
+      const { data: appointments, error } = await query;
 
       if (error) {
         error.status = 500;
         throw error;
       }
 
+      // Enrich appointments with user data
+      await enrichAppointmentsWithUsers(appointments);
+
       res.json({
         message: 'Appointments retrieved successfully',
-        count: data?.length || 0,
-        data: data || []
+        count: appointments?.length || 0,
+        data: appointments || []
       });
     } catch (error) {
       next(error);
     }
   },
 
-  // Get all appointments for a doctor
+  // Get all appointments for a doctor (by doctor_id from doctors table)
   getByDoctorId: async (req, res, next) => {
     try {
       const { doctorId } = req.params;
@@ -54,11 +124,7 @@ const appointmentController = {
 
       let query = supabase
         .from('appointments')
-        .select(`
-          *,
-          doctor:doctors(id, full_name, specialization, profile_image_url, is_verified),
-          user:users(id, full_name, email_address)
-        `)
+        .select('*')
         .eq('doctor_id', doctorId)
         .order('appointment_date', { ascending: true })
         .order('appointment_time', { ascending: true });
@@ -74,17 +140,86 @@ const appointmentController = {
         query = query.gte('appointment_date', today);
       }
 
-      const { data, error } = await query;
+      const { data: appointments, error } = await query;
 
       if (error) {
         error.status = 500;
         throw error;
       }
 
+      // Enrich appointments with user data
+      await enrichAppointmentsWithUsers(appointments);
+
       res.json({
         message: 'Appointments retrieved successfully',
-        count: data?.length || 0,
-        data: data || []
+        count: appointments?.length || 0,
+        data: appointments || []
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  // Get all appointments for a doctor user (by user_id from users table where role='doctor')
+  getByDoctorUserId: async (req, res, next) => {
+    try {
+      const { userId } = req.params;
+      const { status, upcoming } = req.query;
+
+      // First verify the user is a doctor
+      const { data: user, error: userError } = await supabase
+        .from('users')
+        .select('id, role')
+        .eq('id', userId)
+        .single();
+
+      if (userError || !user) {
+        return res.status(404).json({
+          error: 'User not found',
+          message: 'User not found'
+        });
+      }
+
+      if (user.role !== 'doctor') {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'User is not a doctor'
+        });
+      }
+
+      // Get appointments where doctor_id matches the user_id from users table
+      let query = supabase
+        .from('appointments')
+        .select('*')
+        .eq('doctor_id', userId)
+        .order('appointment_date', { ascending: true })
+        .order('appointment_time', { ascending: true });
+
+      // Apply status filter
+      if (status) {
+        query = query.eq('status', status);
+      }
+
+      // Filter for upcoming appointments
+      if (upcoming === 'true') {
+        const today = new Date().toISOString().split('T')[0];
+        query = query.gte('appointment_date', today);
+      }
+
+      const { data: appointments, error } = await query;
+
+      if (error) {
+        error.status = 500;
+        throw error;
+      }
+
+      // Enrich appointments with user data
+      await enrichAppointmentsWithUsers(appointments);
+
+      res.json({
+        message: 'Appointments retrieved successfully',
+        count: appointments?.length || 0,
+        data: appointments || []
       });
     } catch (error) {
       next(error);
@@ -96,13 +231,9 @@ const appointmentController = {
     try {
       const { id } = req.params;
 
-      const { data, error } = await supabase
+      const { data: appointment, error } = await supabase
         .from('appointments')
-        .select(`
-          *,
-          doctor:doctors(id, full_name, specialization, bio, profile_image_url, is_verified, consultation_fee),
-          user:users(id, full_name, email_address, contact_number)
-        `)
+        .select('*')
         .eq('id', id)
         .single();
 
@@ -117,9 +248,12 @@ const appointmentController = {
         throw error;
       }
 
+      // Enrich appointment with user data
+      await enrichAppointmentsWithUsers([appointment]);
+
       res.json({
         message: 'Appointment retrieved successfully',
-        data: data
+        data: appointment
       });
     } catch (error) {
       next(error);
@@ -168,11 +302,7 @@ const appointmentController = {
           meeting_room_id: roomId,
           session_link: appointment_type === 'Video Call' ? `/appointments/video-call?id=${roomId}` : null
         })
-        .select(`
-          *,
-          doctor:doctors(id, full_name, specialization, profile_image_url),
-          user:users(id, full_name, email_address)
-        `)
+        .select('*')
         .single();
 
       if (error) {
@@ -185,6 +315,9 @@ const appointmentController = {
         error.status = 500;
         throw error;
       }
+
+      // Enrich appointment with user data
+      await enrichAppointmentsWithUsers([data]);
 
       res.status(201).json({
         success: true,
@@ -228,15 +361,11 @@ const appointmentController = {
         });
       }
 
-      const { data, error } = await supabase
+      const { data: appointment, error } = await supabase
         .from('appointments')
         .update(updateData)
         .eq('id', id)
-        .select(`
-          *,
-          doctor:doctors(id, full_name, specialization, profile_image_url),
-          user:users(id, full_name, email_address)
-        `)
+        .select('*')
         .single();
 
       if (error) {
@@ -250,9 +379,12 @@ const appointmentController = {
         throw error;
       }
 
+      // Enrich appointment with user data
+      await enrichAppointmentsWithUsers([appointment]);
+
       res.json({
         message: 'Appointment updated successfully',
-        data: data
+        data: appointment
       });
     } catch (error) {
       next(error);
@@ -295,4 +427,6 @@ const appointmentController = {
 };
 
 module.exports = appointmentController;
+
+
 

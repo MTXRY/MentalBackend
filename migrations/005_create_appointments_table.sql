@@ -42,3 +42,5 @@ COMMENT ON COLUMN appointments.status IS 'Appointment status: scheduled, confirm
 COMMENT ON COLUMN appointments.session_link IS 'Link for video call sessions';
 COMMENT ON COLUMN appointments.meeting_room_id IS 'Unique room ID for video call sessions';
 
+
+

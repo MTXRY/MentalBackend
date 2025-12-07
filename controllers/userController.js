@@ -421,8 +421,11 @@ const userController = {
       // Remove password_hash from response
       const { password_hash: _, ...userData } = user;
 
-      // Generate JWT token
-      const token = generateToken(user);
+      // Generate JWT token (include role in token)
+      const token = generateToken({
+        ...user,
+        role: user.role || 'user'
+      });
 
       res.json({
         success: true,
@@ -460,6 +463,96 @@ const userController = {
       res.json({
         message: 'User profile retrieved successfully',
         data: userData
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  // Get all doctors (users with role='doctor')
+  getDoctors: async (req, res, next) => {
+    try {
+      const { specialization, is_active } = req.query;
+
+      let query = supabase
+        .from('users')
+        .select('*')
+        .eq('role', 'doctor')
+        .order('full_name', { ascending: true });
+
+      // Apply filters if provided
+      // Note: Users table might not have specialization field, 
+      // but we'll include it in case it's added later
+      if (specialization) {
+        // If specialization is stored in users table, filter by it
+        // Otherwise, this filter won't work
+        query = query.ilike('specialization', `%${specialization}%`);
+      }
+
+      // Note: Users table might not have is_active field
+      // This is a placeholder for future implementation
+      if (is_active !== undefined) {
+        query = query.eq('is_active', is_active === 'true');
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        error.status = 500;
+        throw error;
+      }
+
+      // Remove password_hash from response
+      const doctors = (data || []).map(({ password_hash, ...doctor }) => ({
+        ...doctor,
+        // Ensure is_verified is set (default to true for doctors in users table)
+        is_verified: doctor.is_verified !== undefined ? doctor.is_verified : true
+      }));
+
+      res.json({
+        message: 'Doctors retrieved successfully',
+        count: doctors.length,
+        data: doctors
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  // Get available doctors (active doctors with role='doctor')
+  getAvailableDoctors: async (req, res, next) => {
+    try {
+      const { specialization } = req.query;
+
+      let query = supabase
+        .from('users')
+        .select('*')
+        .eq('role', 'doctor')
+        .order('full_name', { ascending: true });
+
+      // Apply specialization filter if provided
+      if (specialization) {
+        query = query.ilike('specialization', `%${specialization}%`);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        error.status = 500;
+        throw error;
+      }
+
+      // Remove password_hash from response
+      const doctors = (data || []).map(({ password_hash, ...doctor }) => ({
+        ...doctor,
+        // Ensure is_verified is set (default to true for doctors in users table)
+        is_verified: doctor.is_verified !== undefined ? doctor.is_verified : true
+      }));
+
+      res.json({
+        message: 'Available doctors retrieved successfully',
+        count: doctors.length,
+        data: doctors
       });
     } catch (error) {
       next(error);

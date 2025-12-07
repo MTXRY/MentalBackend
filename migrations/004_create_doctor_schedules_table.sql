@@ -27,3 +27,5 @@ COMMENT ON COLUMN doctor_schedules.day_of_week IS 'Day of week: 0=Sunday, 1=Mond
 COMMENT ON COLUMN doctor_schedules.start_time IS 'Start time of availability on this day';
 COMMENT ON COLUMN doctor_schedules.end_time IS 'End time of availability on this day';
 
+
+

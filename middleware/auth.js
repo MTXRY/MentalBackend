@@ -37,7 +37,8 @@ const authenticate = (req, res, next) => {
     req.user = {
       id: decoded.id,
       email: decoded.email,
-      full_name: decoded.full_name
+      full_name: decoded.full_name,
+      role: decoded.role || 'user'
     };
 
     next();
@@ -70,7 +71,8 @@ const generateToken = (user) => {
   const payload = {
     id: user.id,
     email: user.email_address || user.email,
-    full_name: user.full_name
+    full_name: user.full_name,
+    role: user.role || 'user'
   };
 
   // Token expires in 7 days
@@ -79,11 +81,35 @@ const generateToken = (user) => {
   });
 };
 
+/**
+ * Middleware to check if user is admin
+ */
+const requireAdmin = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
+      error: 'Authentication Failed',
+      message: 'Please login first.'
+    });
+  }
+
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({
+      error: 'Forbidden',
+      message: 'Admin access required.'
+    });
+  }
+
+  next();
+};
+
 module.exports = {
   authenticate,
   generateToken,
+  requireAdmin,
   JWT_SECRET
 };
+
+
 
 
 
