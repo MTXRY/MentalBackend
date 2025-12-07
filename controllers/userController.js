@@ -428,15 +428,17 @@ const userController = {
       });
 
       res.status(200).json({
-  success: true,
-  message: "Login successful",
-  token: token,
-  data: {
-    id: user.id,
-    full_name: user.full_name,
-    email_address: user.email_address,
-  }
-});
+        success: true,
+        message: "Login successful",
+        token: token,
+        data: {
+          id: user.id,
+          user_id: user.id, // Also include as user_id for compatibility
+          full_name: user.full_name,
+          email_address: user.email_address,
+          role: user.role || 'user', // Include role in response
+        }
+      });
 
     } catch (error) {
       next(error);
