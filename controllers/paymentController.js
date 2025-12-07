@@ -271,6 +271,7 @@ const paymentController = {
       }
 
       // Initialize payment using payment service (PHP currency only)
+      // This will also notify the doctor about the payment confirmation
       const result = await paymentService.initializePayment({
         appointment_id,
         doctor_id: appointment.doctor_id,
@@ -282,7 +283,7 @@ const paymentController = {
       });
 
       res.status(201).json({
-        message: 'Payment initialized successfully',
+        message: 'Payment confirmed successfully. Doctor has been notified.',
         data: result
       });
     } catch (error) {

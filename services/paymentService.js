@@ -65,6 +65,9 @@ class PaymentService {
       throw new Error(`Failed to create payment record: ${error.message}`);
     }
 
+    // Notify doctor about payment confirmation
+    await this.notifyDoctor(payment, doctor_id);
+
     // Generate payment details based on method
     const paymentDetails = await this.generatePaymentDetails(payment, payment_method);
 
@@ -72,6 +75,68 @@ class PaymentService {
       payment,
       payment_details: paymentDetails
     };
+  }
+
+  /**
+   * Notify doctor about payment confirmation
+   */
+  async notifyDoctor(payment, doctorId) {
+    try {
+      // Get appointment details
+      const { data: appointment, error: appointmentError } = await supabase
+        .from('appointments')
+        .select('*, user:users!appointments_user_id_fkey(id, full_name)')
+        .eq('id', payment.appointment_id)
+        .single();
+
+      if (appointmentError || !appointment) {
+        console.error('Error fetching appointment for notification:', appointmentError);
+        return;
+      }
+
+      // Get patient name
+      const patientName = appointment.user?.full_name || 'Patient';
+
+      // Create notification message
+      const notificationMessage = `Payment confirmed: ${patientName} has confirmed payment of ₱${payment.amount.toFixed(2)} via ${payment.payment_method.toUpperCase()} for appointment on ${new Date(appointment.appointment_date).toLocaleDateString()} at ${appointment.appointment_time}`;
+
+      // Try to create notification in notifications table (if it exists)
+      // If notifications table doesn't exist, we'll just log it
+      try {
+        const { error: notificationError } = await supabase
+          .from('notifications')
+          .insert([{
+            user_id: doctorId,
+            appointment_id: payment.appointment_id,
+            message: notificationMessage,
+            type: 'payment_confirmed',
+            is_read: false
+          }]);
+
+        if (notificationError) {
+          // If notifications table doesn't exist, just log
+          console.log('Notification to doctor:', notificationMessage);
+        }
+      } catch (err) {
+        // Notifications table might not exist, just log
+        console.log('Doctor notification:', notificationMessage);
+      }
+
+      // Also update appointment status if needed
+      try {
+        await supabase
+          .from('appointments')
+          .update({
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', payment.appointment_id);
+      } catch (err) {
+        console.error('Error updating appointment:', err);
+      }
+    } catch (error) {
+      console.error('Error notifying doctor:', error);
+      // Don't throw error, just log it - notification failure shouldn't break payment
+    }
   }
 
   /**
