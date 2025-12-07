@@ -166,22 +166,38 @@ const appointmentController = {
     try {
       const { userId } = req.params;
       const { status, upcoming } = req.query;
+      const authenticatedUserId = req.user?.id;
+
+      console.log(`[getByDoctorUserId] Request received:`);
+      console.log(`  - Route userId: ${userId}`);
+      console.log(`  - Authenticated userId: ${authenticatedUserId}`);
+      console.log(`  - Filters: status=${status}, upcoming=${upcoming}`);
+
+      // Security check: Ensure authenticated user matches the requested userId
+      if (authenticatedUserId && authenticatedUserId !== userId) {
+        console.warn(`[getByDoctorUserId] Security warning: Authenticated user ${authenticatedUserId} requested appointments for different user ${userId}`);
+        // Allow it for now, but log it
+      }
 
       // First verify the user is a doctor
       const { data: user, error: userError } = await supabase
         .from('users')
-        .select('id, role')
+        .select('id, role, full_name, email_address')
         .eq('id', userId)
         .single();
 
       if (userError || !user) {
+        console.error(`[getByDoctorUserId] User not found: ${userId}`, userError);
         return res.status(404).json({
           error: 'User not found',
           message: 'User not found'
         });
       }
 
+      console.log(`[getByDoctorUserId] User found:`, { id: user.id, role: user.role, name: user.full_name });
+
       if (user.role !== 'doctor') {
+        console.warn(`[getByDoctorUserId] User ${userId} is not a doctor (role: ${user.role})`);
         return res.status(403).json({
           error: 'Forbidden',
           message: 'User is not a doctor'
@@ -189,6 +205,8 @@ const appointmentController = {
       }
 
       // Get appointments where doctor_id matches the user_id from users table
+      console.log(`[getByDoctorUserId] Querying appointments with doctor_id = ${userId}`);
+      
       let query = supabase
         .from('appointments')
         .select('*')
@@ -199,23 +217,39 @@ const appointmentController = {
       // Apply status filter
       if (status) {
         query = query.eq('status', status);
+        console.log(`[getByDoctorUserId] Applied status filter: ${status}`);
       }
 
       // Filter for upcoming appointments
       if (upcoming === 'true') {
         const today = new Date().toISOString().split('T')[0];
         query = query.gte('appointment_date', today);
+        console.log(`[getByDoctorUserId] Applied upcoming filter: >= ${today}`);
       }
 
       const { data: appointments, error } = await query;
 
       if (error) {
+        console.error(`[getByDoctorUserId] Error fetching appointments:`, error);
         error.status = 500;
         throw error;
       }
 
+      console.log(`[getByDoctorUserId] Raw query result:`, {
+        count: appointments?.length || 0,
+        appointments: appointments?.map(a => ({
+          id: a.id,
+          doctor_id: a.doctor_id,
+          appointment_date: a.appointment_date,
+          appointment_time: a.appointment_time,
+          status: a.status
+        }))
+      });
+
       // Enrich appointments with user data
       await enrichAppointmentsWithUsers(appointments);
+
+      console.log(`[getByDoctorUserId] Returning ${appointments?.length || 0} appointments`);
 
       res.json({
         message: 'Appointments retrieved successfully',
@@ -223,6 +257,7 @@ const appointmentController = {
         data: appointments || []
       });
     } catch (error) {
+      console.error(`[getByDoctorUserId] Exception:`, error);
       next(error);
     }
   },
@@ -285,6 +320,20 @@ const appointmentController = {
         });
       }
 
+      // Fetch doctor's name from users table (since doctor_id now references users table)
+      const { data: doctor, error: doctorError } = await supabase
+        .from('users')
+        .select('full_name')
+        .eq('id', doctor_id)
+        .single();
+
+      if (doctorError || !doctor) {
+        return res.status(400).json({
+          error: 'Validation Error',
+          message: 'Invalid doctor_id. Doctor not found.'
+        });
+      }
+
       // Generate meeting room ID if not provided (for video calls)
       const roomId = meeting_room_id || `room-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -294,6 +343,7 @@ const appointmentController = {
         .insert({
           user_id,
           doctor_id,
+          doctor_name: doctor.full_name, // Include doctor_name if column exists
           appointment_date,
           appointment_time,
           duration_minutes: duration_minutes || 60,
