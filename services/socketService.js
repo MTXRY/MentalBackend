@@ -85,8 +85,8 @@ const initializeSocket = (server) => {
 
       // Notify all users in the room that call has started
       const room = io.sockets.adapter.rooms.get(roomId);
-      const usersInRoom = room ? Array.from(room).length : 0;
-      console.log(`Broadcasting call-started to ${usersInRoom} users in room ${roomId}`);
+      const userCount = room ? Array.from(room).length : 0;
+      console.log(`Broadcasting call-started to ${userCount} users in room ${roomId}`);
       
       io.to(roomId).emit('call-started', {
         startedBy: socket.data.userId,
@@ -96,7 +96,6 @@ const initializeSocket = (server) => {
       console.log(`Call-started event sent to all users in room ${roomId}`);
 
       // Get all users in the room and send them to each other
-      const room = io.sockets.adapter.rooms.get(roomId);
       if (room) {
         const usersInRoom = Array.from(room).map(socketId => {
           const userSocket = io.sockets.sockets.get(socketId);
