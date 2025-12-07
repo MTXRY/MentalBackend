@@ -168,7 +168,8 @@ const paymentController = {
     try {
       const {
         appointment_id,
-        payment_method
+        payment_method,
+        cp_number
       } = req.body;
 
       const patientId = req.user.id;
@@ -255,6 +256,20 @@ const paymentController = {
         });
       }
 
+      // Validate CP number if provided
+      if (cp_number) {
+        // Clean and validate Philippine mobile number format
+        const cleanedCpNumber = cp_number.replace(/[\s\-\(\)]/g, '');
+        const phMobileRegex = /^(09|\+639)[0-9]{9}$/;
+        
+        if (!phMobileRegex.test(cleanedCpNumber)) {
+          return res.status(400).json({
+            error: 'Invalid CP number',
+            message: 'Please enter a valid Philippine mobile number (09XXXXXXXXX)'
+          });
+        }
+      }
+
       // Initialize payment using payment service (PHP currency only)
       const result = await paymentService.initializePayment({
         appointment_id,
@@ -262,7 +277,8 @@ const paymentController = {
         patient_id: patientId,
         amount: doctor.consultation_fee,
         currency: 'PHP', // PHP currency only
-        payment_method
+        payment_method,
+        cp_number: cp_number ? cp_number.replace(/[\s\-\(\)]/g, '') : null
       });
 
       res.status(201).json({

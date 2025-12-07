@@ -18,7 +18,8 @@ class PaymentService {
       patient_id,
       amount,
       currency = 'PHP',
-      payment_method
+      payment_method,
+      cp_number
     } = paymentData;
 
     // Validate payment method
@@ -49,7 +50,8 @@ class PaymentService {
       metadata: {
         payment_reference: paymentReference,
         initialized_at: new Date().toISOString(),
-        payment_method: payment_method.toLowerCase()
+        payment_method: payment_method.toLowerCase(),
+        cp_number: cp_number || null
       }
     };
 
