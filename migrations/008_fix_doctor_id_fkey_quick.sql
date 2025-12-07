@@ -31,3 +31,4 @@ CREATE TRIGGER validate_doctor_role_trigger
   FOR EACH ROW
   EXECUTE FUNCTION validate_doctor_role();
 
+
