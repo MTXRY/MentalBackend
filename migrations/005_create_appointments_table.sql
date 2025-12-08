@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS appointments (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   CONSTRAINT unique_appointment_time UNIQUE(doctor_id, appointment_date, appointment_time)
 );
-
+  
 -- Create index on user_id for user's appointment history
 CREATE INDEX IF NOT EXISTS idx_appointments_user_id ON appointments(user_id);
 
