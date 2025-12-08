@@ -14,6 +14,7 @@ BEGIN
     -- Make the column nullable
     ALTER TABLE appointments 
     ALTER COLUMN doctor_name DROP NOT NULL;
+     
     
     -- Add comment
     COMMENT ON COLUMN appointments.doctor_name IS 
