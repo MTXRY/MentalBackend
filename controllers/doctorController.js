@@ -3,7 +3,33 @@ const bcrypt = require('bcrypt');
 const { generateToken } = require('../middleware/auth');
 
 const doctorController = {
-  // Get all doctors
+  // Get all doctors from Supabase
+  getDoctors: async (req, res, next) => {
+    try {
+      const { data, error } = await supabase
+        .from('doctors')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      // Remove password_hash from response for security
+      const doctors = (data || []).map(({ password_hash, ...doctor }) => doctor);
+
+      res.json({ 
+        success: true,
+        message: 'Doctors retrieved successfully', 
+        count: doctors.length, 
+        data: doctors 
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  // Get all doctors (with filters)
   getAll: async (req, res, next) => {
     try {
       const { specialization, is_active, is_verified, mental_health_specialty } = req.query;
@@ -80,7 +106,134 @@ const doctorController = {
     }
   },
 
-  // Register doctor
+  // Create doctor (Admin function - allows setting verification status)
+  createDoctor: async (req, res, next) => {
+    try {
+      const {
+        full_name, email_address, password, phone_number,
+        specialization, license_number, qualifications,
+        bio, years_of_experience, consultation_fee, profile_image_url,
+        mental_health_specialties, is_active, is_verified
+      } = req.body;
+
+      // Required fields validation
+      if (!full_name || !email_address || !specialization || !license_number) {
+        return res.status(400).json({
+          success: false,
+          error: 'Validation Error',
+          message: 'Required fields: full_name, email_address, specialization, license_number'
+        });
+      }
+
+      // Password is optional for admin-created doctors (can be set later)
+      let password_hash = null;
+      if (password) {
+        if (password.length < 8) {
+          return res.status(400).json({ 
+            success: false,
+            error: 'Password must be at least 8 characters' 
+          });
+        }
+        password_hash = await bcrypt.hash(password, 10);
+      }
+
+      // Validate mental_health_specialties if provided (should be an array)
+      if (mental_health_specialties !== undefined && !Array.isArray(mental_health_specialties)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Validation Error',
+          message: 'mental_health_specialties must be an array (e.g., ["Anxiety", "Depression"])'
+        });
+      }
+
+      // Check for existing email
+      const { data: existingDoctor } = await supabase
+        .from('doctors')
+        .select('email_address')
+        .eq('email_address', email_address)
+        .single();
+      
+      if (existingDoctor) {
+        return res.status(409).json({ 
+          success: false,
+          error: 'A doctor with this email already exists' 
+        });
+      }
+
+      // Check for existing license number
+      const { data: existingLicense } = await supabase
+        .from('doctors')
+        .select('license_number')
+        .eq('license_number', license_number)
+        .single();
+      
+      if (existingLicense) {
+        return res.status(409).json({ 
+          success: false,
+          error: 'A doctor with this license number already exists' 
+        });
+      }
+
+      // Prepare insert data - only include fields that are provided
+      const insertData = {
+        full_name,
+        email_address,
+        specialization,
+        license_number,
+        is_active: is_active !== undefined ? is_active : true,
+        is_verified: is_verified !== undefined ? is_verified : false
+      };
+
+      // Add optional fields only if they are provided
+      if (phone_number !== undefined && phone_number !== null && phone_number !== '') {
+        insertData.phone_number = phone_number;
+      }
+      if (qualifications !== undefined && qualifications !== null && qualifications !== '') {
+        insertData.qualifications = qualifications;
+      }
+      if (bio !== undefined && bio !== null && bio !== '') {
+        insertData.bio = bio;
+      }
+      if (years_of_experience !== undefined && years_of_experience !== null) {
+        insertData.years_of_experience = years_of_experience;
+      }
+      if (consultation_fee !== undefined && consultation_fee !== null) {
+        insertData.consultation_fee = consultation_fee;
+      }
+      if (profile_image_url !== undefined && profile_image_url !== null && profile_image_url !== '') {
+        insertData.profile_image_url = profile_image_url;
+      }
+
+      // Add password hash if provided
+      if (password_hash) {
+        insertData.password_hash = password_hash;
+      }
+
+      // Add mental_health_specialties if provided
+      if (mental_health_specialties !== undefined && Array.isArray(mental_health_specialties)) {
+        insertData.mental_health_specialties = mental_health_specialties;
+      }
+
+      const { data, error } = await supabase
+        .from('doctors')
+        .insert(insertData)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const { password_hash: _, ...doctorData } = data;
+      res.status(201).json({ 
+        success: true, 
+        message: 'Doctor created successfully', 
+        data: doctorData 
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  // Register doctor (Public registration)
   register: async (req, res, next) => {
     try {
       const {
@@ -115,16 +268,39 @@ const doctorController = {
 
       const password_hash = await bcrypt.hash(password, 10);
 
-      // Prepare insert data
+      // Prepare insert data - only include fields that are provided
       const insertData = {
-        full_name, email_address, password_hash, phone_number,
-        specialization, license_number, qualifications, bio,
-        years_of_experience, consultation_fee, profile_image_url,
-        is_active: true, is_verified: false
+        full_name,
+        email_address,
+        password_hash,
+        specialization,
+        license_number,
+        is_active: true,
+        is_verified: false
       };
 
+      // Add optional fields only if they are provided
+      if (phone_number !== undefined && phone_number !== null && phone_number !== '') {
+        insertData.phone_number = phone_number;
+      }
+      if (qualifications !== undefined && qualifications !== null && qualifications !== '') {
+        insertData.qualifications = qualifications;
+      }
+      if (bio !== undefined && bio !== null && bio !== '') {
+        insertData.bio = bio;
+      }
+      if (years_of_experience !== undefined && years_of_experience !== null) {
+        insertData.years_of_experience = years_of_experience;
+      }
+      if (consultation_fee !== undefined && consultation_fee !== null) {
+        insertData.consultation_fee = consultation_fee;
+      }
+      if (profile_image_url !== undefined && profile_image_url !== null && profile_image_url !== '') {
+        insertData.profile_image_url = profile_image_url;
+      }
+
       // Add mental_health_specialties if provided (defaults to empty array from migration)
-      if (mental_health_specialties !== undefined) {
+      if (mental_health_specialties !== undefined && Array.isArray(mental_health_specialties)) {
         insertData.mental_health_specialties = mental_health_specialties;
       }
 
